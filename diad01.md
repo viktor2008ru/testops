@@ -11,18 +11,21 @@
 -- Сохрани как report_projects.sql и запусти:
 -- psql -h localhost -U testops -d testops -W -f report_projects.sql -o /tmp/projects.txt
 
-WITH cutoff AS (SELECT (EXTRACT(EPOCH FROM (NOW() - INTERVAL '30 days')) * 1000)::bigint AS ms)
+WITH cutoff AS (
+    SELECT (EXTRACT(EPOCH FROM (NOW() - INTERVAL '30 days')) * 1000)::bigint AS ms
+)
 SELECT 
     COALESCE(p.id, 0) AS project_id,
     COUNT(*) AS files,
     ROUND(SUM(a.content_length)::numeric / 1024 / 1024 / 1024, 2) AS gb,
-    ROUND(100.0 * COUNT(*) FILTER (WHERE a.created_date < cutoff.ms) / COUNT(*), 1) AS old_pct
+    ROUND(100.0 * COUNT(*) FILTER (WHERE a.created_date < c.ms) / NULLIF(COUNT(*), 0), 1) AS old_pct
 FROM test_result_attachment a
 JOIN test_result tr ON a.test_result_id = tr.id
 JOIN launch l ON tr.launch_id = l.id
 LEFT JOIN project p ON l.project_id = p.id
+CROSS JOIN cutoff c
 WHERE a.content_length > 0 AND a.storage_key IS NOT NULL
-GROUP BY COALESCE(p.id, 0), cutoff.ms
+GROUP BY COALESCE(p.id, 0), c.ms
 ORDER BY gb DESC
 LIMIT 20;
 ```
